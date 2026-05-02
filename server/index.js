@@ -52,6 +52,21 @@ app.use('/api/game', gameRoutes);
 app.use('/api/puzzle', puzzleRoutes);
 app.use('/api/user', userRoutes);
 
+// TEMP: Create admin
+app.get('/api/setup-admin', async (req, res) => {
+  try {
+    const { register } = require('./src/services/authService');
+    const result = await register({
+      username: 'admin_kotesh', // using a unique username just in case
+      email: 'koteshcheruku000@gmail.com',
+      password: 'DummyPass1!'
+    });
+    res.json({ message: 'Admin created successfully!', user: result.user });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Health check
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
 
