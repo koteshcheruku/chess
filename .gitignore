@@ -1,5 +1,7 @@
-*.md
+node_modules/
 .env
-node_modules
+dist/
+build/
+*.log
+features/
 /features
-/node_modules

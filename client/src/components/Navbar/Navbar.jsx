@@ -23,7 +23,7 @@ export default function Navbar() {
         <nav className="navbar-links">
           {accessToken && (
             <>
-              <Link to="/play"   className={isActive('/play')}>Play</Link>
+              <Link to="/play" className={isActive('/play')}>Play</Link>
               <Link to="/puzzle" className={isActive('/puzzle')}>Puzzles</Link>
             </>
           )}
@@ -42,7 +42,7 @@ export default function Navbar() {
             </>
           ) : (
             <>
-              <Link to="/login"    className="btn btn-ghost btn-sm">Log in</Link>
+              <Link to="/login" className="btn btn-ghost btn-sm">Log in</Link>
               <Link to="/register" className="btn btn-primary btn-sm">Register</Link>
             </>
           )}
@@ -63,7 +63,7 @@ export default function Navbar() {
         <div className="mobile-menu">
           {accessToken && (
             <>
-              <Link to="/play"   className="mobile-link" onClick={closeMenu}>Play</Link>
+              <Link to="/play" className="mobile-link" onClick={closeMenu}>Play</Link>
               <Link to="/puzzle" className="mobile-link" onClick={closeMenu}>Puzzles</Link>
               <Link to={`/profile/${user?.id}`} className="mobile-link" onClick={closeMenu}>
                 {user?.username} <span className="nav-rating">{user?.rating ?? 1200}</span>
@@ -76,7 +76,7 @@ export default function Navbar() {
           )}
           {!accessToken && (
             <>
-              <Link to="/login"    className="mobile-link" onClick={closeMenu}>Log in</Link>
+              <Link to="/login" className="mobile-link" onClick={closeMenu}>Log in</Link>
               <Link to="/register" className="mobile-link mobile-link--accent" onClick={closeMenu}>Register</Link>
             </>
           )}
