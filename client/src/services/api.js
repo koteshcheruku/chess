@@ -1,7 +1,9 @@
 import axios from 'axios';
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+
 const api = axios.create({
-  baseURL: '/api',
+  baseURL: `${API_BASE_URL}/api`,
   timeout: 10000,
 });
 
@@ -53,7 +55,7 @@ api.interceptors.response.use(
         const { state } = raw ? JSON.parse(raw) : {};
         if (!state?.refreshToken) throw new Error('No refresh token');
 
-        const { data } = await axios.post('/api/auth/refresh', {
+        const { data } = await axios.post(`${API_BASE_URL}/api/auth/refresh`, {
           refreshToken: state.refreshToken,
         });
 
