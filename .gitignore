@@ -1,4 +1,4 @@
 *.md
 .env
-!README.md
-/features
+node_modules
+features/
