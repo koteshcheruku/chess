@@ -18,7 +18,10 @@ const { generalLimiter } = require('./src/middleware/rateLimit');
 
 const app = express();
 const server = http.createServer(app);
-
+app.get('/test', (req, res) => {
+  console.log("Test route hit!"); // Check Render logs for this
+  res.json({ message: "Pass! Backend is working." });
+});
 // --- Security & Utilities ---
 app.use(helmet());
 app.use(cors({
@@ -68,6 +71,4 @@ const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
   console.log(`Server running on:${PORT}`);
 });
-
-app.get('/test', (req, res) => res.json({ message: "Routes are working!" }));
 
