@@ -1,4 +1,5 @@
 *.md
 .env
 node_modules
-features/
+/features
+/node_modules
