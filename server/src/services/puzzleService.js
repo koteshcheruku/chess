@@ -3,21 +3,39 @@ const { query } = require('../config/db');
 const { calculatePuzzleElo } = require('./eloService');
 
 /**
+ * Difficulty presets — offset ranges applied to the user's current rating.
+ * Each difficulty widens or shifts the rating band differently.
+ */
+const DIFFICULTY_RANGES = {
+  easy:   { minOffset: -400, maxOffset: -100 },
+  medium: { minOffset: -250, maxOffset:  250 },
+  hard:   { minOffset:  100, maxOffset:  500 },
+  master: { minOffset:  400, maxOffset: 1000 },
+};
+
+/**
  * Fetch a puzzle from the Lichess Open API and cache it in our DB.
  * Lichess /api/puzzle/next returns a random puzzle (no auth needed).
- * We can pass a difficulty hint but it's approximate.
+ * When LICHESS_TOKEN is set, we send it for better rate limits.
  */
 async function fetchAndCacheFromLichess(userRating) {
   try {
     const https = require('https');
     const url = 'https://lichess.org/api/puzzle/next';
 
+    const headers = {
+      'Accept': 'application/json',
+      'User-Agent': 'ChessTrainingApp/1.0',
+    };
+
+    // Use Lichess token if available for better rate limits
+    if (process.env.LICHESS_TOKEN) {
+      headers['Authorization'] = `Bearer ${process.env.LICHESS_TOKEN}`;
+    }
+
     const lichessPuzzle = await new Promise((resolve, reject) => {
       const req = https.get(url, {
-        headers: {
-          'Accept': 'application/json',
-          'User-Agent': 'ChessTrainingApp/1.0',
-        },
+        headers,
         timeout: 5000,
       }, (res) => {
         let body = '';
@@ -67,16 +85,23 @@ async function fetchAndCacheFromLichess(userRating) {
 }
 
 /**
- * Get a random puzzle near the user's rating (±250).
+ * Get a random puzzle near the user's rating, filtered by difficulty.
  * Priority:
  *   1. Unsolved puzzles in rating range (local DB)
  *   2. Any puzzle in rating range (local DB)
  *   3. Live fetch from Lichess API (cached for next time)
  *   4. Any puzzle in DB (last resort)
+ *
+ * @param {string} userId
+ * @param {number} userRating
+ * @param {string} difficulty - one of: easy, medium, hard, master
  */
-async function getRandomPuzzle(userId, userRating) {
-  const ratingMin = Math.max(100, userRating - 250);
-  const ratingMax = userRating + 250;
+async function getRandomPuzzle(userId, userRating, difficulty = 'medium') {
+  const range = DIFFICULTY_RANGES[difficulty] || DIFFICULTY_RANGES.medium;
+  const ratingMin = Math.max(100, userRating + range.minOffset);
+  const ratingMax = userRating + range.maxOffset;
+
+  console.log(`[PuzzleService] Fetching puzzle: user=${userRating}, difficulty=${difficulty}, range=${ratingMin}-${ratingMax}`);
 
   // 1. Prefer unsolved puzzles first
   const { rows } = await query(
@@ -166,6 +191,7 @@ async function submitPuzzle(userId, { puzzleId, moves, timeTaken }) {
     await query('UPDATE users SET rating = $1, updated_at = NOW() WHERE id = $2', [newRating, userId]);
   }
 
+  // Always return the full solution so the client can show the answer on failure
   return { success, delta, newRating, correctMoves: solution };
 }
 

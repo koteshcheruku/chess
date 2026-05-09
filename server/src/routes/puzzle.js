@@ -5,10 +5,17 @@ const { validate, submitPuzzleSchema } = require('../middleware/validate');
 const { puzzleLimiter } = require('../middleware/rateLimit');
 const { getRandomPuzzle, getPuzzle, submitPuzzle } = require('../services/puzzleService');
 
+const VALID_DIFFICULTIES = ['easy', 'medium', 'hard', 'master'];
+
 // GET /api/puzzle/random — get a puzzle matched to user rating
+// Query params:
+//   ?difficulty=easy|medium|hard|master (default: medium)
 router.get('/random', requireAuth, puzzleLimiter, async (req, res, next) => {
   try {
-    const puzzle = await getRandomPuzzle(req.user.id, req.user.rating || 1200);
+    const difficulty = VALID_DIFFICULTIES.includes(req.query.difficulty)
+      ? req.query.difficulty
+      : 'medium';
+    const puzzle = await getRandomPuzzle(req.user.id, req.user.rating || 1200, difficulty);
     res.json(puzzle);
   } catch (err) {
     next(err);

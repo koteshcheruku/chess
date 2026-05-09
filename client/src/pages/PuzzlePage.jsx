@@ -9,7 +9,16 @@ import './Page.css';
 const HINT_SQ  = 'rgba(255,200,0,0.5)';
 const WRONG_SQ = 'rgba(239,68,68,0.5)';
 const CORRECT_SQ = 'rgba(100,220,100,0.5)';
+const REPLAY_FROM = 'rgba(120,180,255,0.6)';
+const REPLAY_TO   = 'rgba(70,140,250,0.8)';
 const TIMER_MAX = 60;
+
+const DIFFICULTY_OPTIONS = [
+  { value: 'easy',   label: 'Easy',   icon: '🟢', desc: 'Below your level' },
+  { value: 'medium', label: 'Medium', icon: '🟡', desc: 'Your rating range' },
+  { value: 'hard',   label: 'Hard',   icon: '🟠', desc: 'Above your level' },
+  { value: 'master', label: 'Master', icon: '🔴', desc: 'Expert tactics' },
+];
 
 export default function PuzzlePage() {
   const { user } = useAuthStore();
@@ -25,12 +34,13 @@ export default function PuzzlePage() {
   const startTimeRef = useRef(null);
   const puzzleRef  = useRef(null);   // current puzzle data
   const playerMovesRef = useRef([]); // accumulated player moves
+  const replayTimerRef = useRef(null); // for solution replay animation
 
   // React state — only for UI rendering
   const [fen, setFen]           = useState('');
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState('');
-  const [status, setStatus]     = useState('idle'); // idle|playing|success|fail
+  const [status, setStatus]     = useState('idle'); // idle|playing|success|fail|replaying
   const [feedback, setFeedback] = useState(null);
   const [ratingDelta, setRatingDelta] = useState(null);
   const [newRating, setNewRating]     = useState(null);
@@ -38,6 +48,9 @@ export default function PuzzlePage() {
   const [customStyles, setCustomStyles] = useState({});
   const [puzzleDisplay, setPuzzleDisplay] = useState(null); // puzzle info for UI
   const [orientation, setOrientation]    = useState('white');
+  const [difficulty, setDifficulty]      = useState('medium');
+  const [solutionMoves, setSolutionMoves] = useState([]); // correct moves from backend
+  const [replayStep, setReplayStep]      = useState(-1); // current step in replay animation
 
   // ─── Submit solution to backend ──────────────────────────────────────────
   const submitSolution = useCallback(async (moves) => {
@@ -55,14 +68,17 @@ export default function PuzzlePage() {
       setStatus(data.success ? 'success' : 'fail');
       setRatingDelta(data.delta);
       setNewRating(data.newRating);
+      setSolutionMoves(data.correctMoves || []);
 
       if (!data.success && data.correctMoves) {
-        const styles = {};
-        data.correctMoves.forEach((uci) => {
-          styles[uci.slice(0, 2)] = { background: HINT_SQ };
-          styles[uci.slice(2, 4)] = { background: HINT_SQ };
-        });
-        setCustomStyles(styles);
+        // Highlight first move squares as a hint
+        const firstMove = data.correctMoves[0];
+        if (firstMove) {
+          const styles = {};
+          styles[firstMove.slice(0, 2)] = { background: HINT_SQ };
+          styles[firstMove.slice(2, 4)] = { background: HINT_SQ };
+          setCustomStyles(styles);
+        }
       }
     } catch { /* best effort */ }
   }, []);
@@ -73,12 +89,72 @@ export default function PuzzlePage() {
     setStatus('fail');
     submittedRef.current = true;
     clearInterval(timerRef.current);
+    // Submit with whatever moves were made to get the solution back
+    const timeTaken = Math.round((Date.now() - startTimeRef.current) / 1000);
+    (async () => {
+      try {
+        const { data } = await api.post('/puzzle/submit', {
+          puzzleId: puzzleRef.current.id,
+          moves: playerMovesRef.current,
+          timeTaken,
+        });
+        setRatingDelta(data.delta);
+        setNewRating(data.newRating);
+        setSolutionMoves(data.correctMoves || []);
+      } catch { /* best effort */ }
+    })();
+  }, []);
+
+  // ─── Show Solution Replay ────────────────────────────────────────────────
+  const showSolution = useCallback(() => {
+    if (!puzzleRef.current || solutionMoves.length === 0) return;
+
+    // Reset the board to the puzzle's starting position
+    const c = new Chess(puzzleRef.current.fen);
+    chessRef.current = c;
+    setFen(c.fen());
+    setStatus('replaying');
+    setReplayStep(-1);
+    setCustomStyles({});
+
+    let step = 0;
+    replayTimerRef.current = setInterval(() => {
+      if (step >= solutionMoves.length) {
+        clearInterval(replayTimerRef.current);
+        setReplayStep(solutionMoves.length - 1);
+        setStatus('fail'); // go back to fail state after replay
+        return;
+      }
+
+      const uci = solutionMoves[step];
+      const from = uci.slice(0, 2);
+      const to = uci.slice(2, 4);
+      const promotion = uci[4] || undefined;
+
+      const result = c.move({ from, to, promotion });
+      if (result) {
+        setFen(c.fen());
+        setCustomStyles({
+          [from]: { background: REPLAY_FROM },
+          [to]:   { background: REPLAY_TO },
+        });
+        setReplayStep(step);
+      }
+
+      step++;
+    }, 1000);
+  }, [solutionMoves]);
+
+  // Cleanup replay timer on unmount
+  useEffect(() => {
+    return () => { clearInterval(replayTimerRef.current); };
   }, []);
 
   // ─── Load a new puzzle ───────────────────────────────────────────────────
   const loadPuzzle = useCallback(async () => {
-    // Clear timer immediately
+    // Clear timers immediately
     clearInterval(timerRef.current);
+    clearInterval(replayTimerRef.current);
 
     // Reset all refs synchronously (no re-render lag)
     submittedRef.current = false;
@@ -96,9 +172,11 @@ export default function PuzzlePage() {
     setCustomStyles({});
     setTimeLeft(TIMER_MAX);
     setFen('');
+    setSolutionMoves([]);
+    setReplayStep(-1);
 
     try {
-      const { data } = await api.get('/puzzle/random');
+      const { data } = await api.get(`/puzzle/random?difficulty=${difficulty}`);
       const c = new Chess(data.fen);
 
       // Store in refs
@@ -128,7 +206,7 @@ export default function PuzzlePage() {
     } finally {
       setLoading(false);
     }
-  }, [handleTimeout]);
+  }, [handleTimeout, difficulty]);
 
   // Mount: load first puzzle; cleanup timer on unmount
   useEffect(() => {
@@ -180,12 +258,14 @@ export default function PuzzlePage() {
         }, 600);
       }
     } else {
-      // Wrong move — undo it
+      // Wrong move — submit as failure immediately
       chessRef.current.undo();
-      playerMovesRef.current = newMoves.slice(0, -1); // remove the bad move
+      playerMovesRef.current = newMoves.slice(0, -1);
       setFen(chessRef.current.fen());
       setCustomStyles({ [from]: { background: WRONG_SQ }, [to]: { background: WRONG_SQ } });
-      setTimeout(() => setCustomStyles({}), 800);
+
+      // Auto-submit on wrong move so user gets the answer
+      submitSolution(playerMovesRef.current);
     }
 
     return true;
@@ -200,6 +280,7 @@ export default function PuzzlePage() {
     : 'var(--accent)';
 
   const boardWidth = Math.min(520, window.innerWidth - 32);
+  const isFinished = status === 'success' || status === 'fail';
 
   // ─── Render ──────────────────────────────────────────────────────────────
   if (loading) {
@@ -223,6 +304,23 @@ export default function PuzzlePage() {
 
   return (
     <main className="page">
+      {/* Difficulty selector */}
+      <div className="puzzle-difficulty-bar">
+        {DIFFICULTY_OPTIONS.map((d) => (
+          <button
+            key={d.value}
+            id={`difficulty-${d.value}`}
+            className={`puzzle-difficulty-btn ${difficulty === d.value ? 'active' : ''}`}
+            onClick={() => setDifficulty(d.value)}
+            disabled={status === 'playing' || status === 'replaying'}
+            title={d.desc}
+          >
+            <span className="difficulty-icon">{d.icon}</span>
+            <span className="difficulty-label">{d.label}</span>
+          </button>
+        ))}
+      </div>
+
       <div style={{
         display: 'grid',
         gridTemplateColumns: `${boardWidth}px 1fr`,
@@ -240,14 +338,14 @@ export default function PuzzlePage() {
                 )}
               </span>
               <span className="text-sm" style={{ color: timerColor, fontWeight: 600 }}>
-                {timeLeft}s
+                {status === 'replaying' ? '▶ Replaying' : `${timeLeft}s`}
               </span>
             </div>
             <div style={{ height: '4px', background: 'var(--surface-3)', borderRadius: '2px' }}>
               <div style={{
                 height: '100%',
-                width: `${timePercent}%`,
-                background: timerColor,
+                width: status === 'replaying' ? '100%' : `${timePercent}%`,
+                background: status === 'replaying' ? 'var(--accent)' : timerColor,
                 borderRadius: '2px',
                 transition: 'width 1s linear, background var(--transition)',
               }} />
@@ -273,7 +371,7 @@ export default function PuzzlePage() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', paddingTop: 'var(--space-6)' }}>
           <div>
             <h2 style={{ marginBottom: 'var(--space-1)' }}>
-              {status === 'success' ? '✓ Correct!' : status === 'fail' ? '✗ Incorrect' : 'Find the best move'}
+              {status === 'success' ? '✓ Correct!' : status === 'fail' ? '✗ Incorrect' : status === 'replaying' ? '▶ Solution' : 'Find the best move'}
             </h2>
             <p>{orientation === 'white' ? 'White to move' : 'Black to move'}</p>
           </div>
@@ -306,7 +404,7 @@ export default function PuzzlePage() {
           {status === 'fail' && (
             <div className="alert alert-error">
               {timeLeft === 0 ? "Time's up." : 'Wrong move.'}{' '}
-              Correct solution highlighted on the board.
+              {solutionMoves.length > 0 ? 'Click "Show Solution" to see the answer.' : 'Correct solution highlighted on the board.'}
               {ratingDelta !== null && (
                 <span style={{ display: 'block', marginTop: 4 }}>
                   Rating: <strong>{newRating}</strong>{' '}
@@ -316,8 +414,45 @@ export default function PuzzlePage() {
             </div>
           )}
 
+          {status === 'replaying' && (
+            <div className="alert" style={{ background: 'var(--surface-2)', border: '1px solid var(--accent)' }}>
+              <span style={{ color: 'var(--accent)', fontWeight: 600 }}>▶ Playing solution…</span>
+              <span style={{ display: 'block', marginTop: 4, color: 'var(--text-muted)' }}>
+                Move {replayStep + 1} of {solutionMoves.length}
+              </span>
+            </div>
+          )}
+
+          {/* Solution move list — shown after fail or replay */}
+          {(status === 'fail' || status === 'replaying') && solutionMoves.length > 0 && (
+            <div className="solution-moves-panel">
+              <p className="text-sm text-muted font-semibold" style={{ marginBottom: 'var(--space-2)' }}>
+                Solution moves
+              </p>
+              <div className="solution-moves-list">
+                {solutionMoves.map((m, i) => (
+                  <span
+                    key={i}
+                    className={`solution-move ${i <= replayStep ? 'played' : ''} ${i % 2 === 0 ? 'player-move' : 'opponent-move'}`}
+                  >
+                    {i % 2 === 0 ? `${Math.floor(i / 2) + 1}. ` : ''}{m}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-            {(status === 'success' || status === 'fail') && (
+            {status === 'fail' && solutionMoves.length > 0 && (
+              <button
+                id="show-solution"
+                className="btn btn-accent"
+                onClick={showSolution}
+              >
+                ▶ Show Solution
+              </button>
+            )}
+            {(isFinished || status === 'replaying') && (
               <button id="next-puzzle" className="btn btn-primary" onClick={loadPuzzle}>
                 Next puzzle →
               </button>

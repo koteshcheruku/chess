@@ -17,6 +17,7 @@ const userRoutes = require('./src/routes/user');
 const { generalLimiter } = require('./src/middleware/rateLimit');
 
 const app = express();
+app.set('trust proxy', 1);
 const server = http.createServer(app);
 app.get('/test', (req, res) => {
   console.log("Test route hit!"); // Check Render logs for this

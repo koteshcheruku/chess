@@ -7,12 +7,12 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/api': {
-        target: 'https://chess-client-rlw5.onrender.com',
+        target: 'http://localhost:5000',
         changeOrigin: true,
       },
       // Proxy socket.io to Express (port 5000), not Vite
       '/socket.io': {
-        target: 'https://chess-client-rlw5.onrender.com',
+        target: 'http://localhost:5000',
         changeOrigin: true,
         ws: true,  // enable WebSocket proxying
       },
