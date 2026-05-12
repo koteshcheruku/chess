@@ -1,5 +1,4 @@
 import axios from 'axios';
-import { disconnectSocket, connectSocket } from '../socket/socket';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
@@ -63,9 +62,8 @@ api.interceptors.response.use(
         const updated = { ...state, accessToken: data.accessToken, refreshToken: data.refreshToken };
         localStorage.setItem('chess-auth', JSON.stringify({ state: updated, version: 0 }));
 
-        // Reconnect socket with fresh token so real-time connections don't stay broken
-        disconnectSocket();
-        connectSocket(data.accessToken);
+        // Reconnect socket via event to avoid circular dependency imports
+        window.dispatchEvent(new CustomEvent('auth_refresh', { detail: { accessToken: data.accessToken } }));
 
         processQueue(null, data.accessToken);
         original.headers.Authorization = `Bearer ${data.accessToken}`;

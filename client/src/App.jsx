@@ -29,6 +29,19 @@ function App() {
     if (accessToken) connectSocket(accessToken);
   }, [accessToken]);
 
+  // Listen for background token refreshes to reconnect socket
+  React.useEffect(() => {
+    const handleRefresh = (e) => {
+      // Dynamic import to avoid any chance of circular dependencies
+      import('./socket/socket').then(({ disconnectSocket, connectSocket }) => {
+        disconnectSocket();
+        connectSocket(e.detail.accessToken);
+      });
+    };
+    window.addEventListener('auth_refresh', handleRefresh);
+    return () => window.removeEventListener('auth_refresh', handleRefresh);
+  }, []);
+
   return (
     <BrowserRouter>
       <Navbar />
