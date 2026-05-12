@@ -35,7 +35,21 @@ export default function GamePage() {
     fen, playerColor, white, black, moves,
     clocks, status, result, resultReason,
     drawOffered, drawOfferedBy, reset,
+    isBotGame, botElo,
   } = useGameStore();
+
+  const [waitingTimeout, setWaitingTimeout] = useState(false);
+
+  useEffect(() => {
+    let timer;
+    if (status === 'waiting') {
+      setWaitingTimeout(false);
+      timer = setTimeout(() => {
+        setWaitingTimeout(true);
+      }, 60000);
+    }
+    return () => clearTimeout(timer);
+  }, [status]);
 
   // Hook that wires socket events → store + exposes actions
   const { makeMove, resign, offerDraw, acceptDraw } = useGame(id);
@@ -63,7 +77,10 @@ export default function GamePage() {
     if (result === '1/2-1/2') return 'Draw';
     const won = (result === '1-0' && playerColor === 'white') ||
                 (result === '0-1' && playerColor === 'black');
-    return won ? 'You won' : 'You lost';
+    if (isBotGame) {
+      return won ? 'You Won! 🤖 defeated' : 'Bot Won';
+    }
+    return won ? 'You won' : 'Opponent won';
   };
 
   const reasonLabel = (r) => {
@@ -145,15 +162,27 @@ export default function GamePage() {
           {/* Controls */}
           {!isFinished && status === 'active' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-              <button id="offer-draw-btn" className="btn btn-ghost btn-sm" onClick={offerDraw}>Offer draw</button>
+              {!isBotGame && (
+                <button id="offer-draw-btn" className="btn btn-ghost btn-sm" onClick={offerDraw}>Offer draw</button>
+              )}
               <button id="resign-btn" className="btn btn-danger btn-sm" onClick={() => { if (window.confirm('Resign this game?')) resign(); }}>Resign</button>
             </div>
           )}
 
           {status === 'waiting' && (
             <div className="card card-sm">
-              <p className="text-sm text-muted">Waiting for opponent...</p>
-              <div className="spinner mt-2" />
+              {waitingTimeout ? (
+                <>
+                  <p className="text-sm text-error">Unable to create new game</p>
+                  <p className="text-sm text-muted mt-2">No opponent found in time.</p>
+                  <button className="btn btn-ghost btn-sm mt-2" onClick={() => navigate('/play')}>Cancel</button>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm text-muted">Waiting for opponent...</p>
+                  <div className="spinner mt-2" />
+                </>
+              )}
             </div>
           )}
         </div>

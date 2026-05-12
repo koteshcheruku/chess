@@ -171,6 +171,8 @@ function registerGameHandlers(io, socket) {
         white: { id: game.white_id, username: game.white_username ?? 'White', rating: game.white_rating ?? 1200 },
         black: { id: game.black_id, username: game.black_username ?? 'Black', rating: game.black_rating ?? 1200 },
         timeControl: game.time_control,
+        isBotGame: game.is_bot_game,
+        botElo: game.bot_elo,
       });
 
       // Start game when both sides are present

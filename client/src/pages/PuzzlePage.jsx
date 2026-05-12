@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Chess } from 'chess.js';
 import { Chessboard } from 'react-chessboard';
 import { useAuthStore } from '../store/authStore';
@@ -21,6 +22,7 @@ const DIFFICULTY_OPTIONS = [
 ];
 
 export default function PuzzlePage() {
+  const navigate = useNavigate();
   const { user } = useAuthStore();
   const { boardTheme } = useSettingsStore();
 
@@ -144,6 +146,72 @@ export default function PuzzlePage() {
       step++;
     }, 1000);
   }, [solutionMoves]);
+
+  // ─── Quit Puzzle ─────────────────────────────────────────────────────────
+  const handleQuit = useCallback(() => {
+    clearInterval(timerRef.current);
+    navigate('/');
+  }, [navigate]);
+
+  // ─── Skip Puzzle ─────────────────────────────────────────────────────────
+  const handleSkip = useCallback(async () => {
+    if (submittedRef.current || !puzzleRef.current) return;
+    submittedRef.current = true;
+    clearInterval(timerRef.current);
+    try {
+      await api.post('/puzzle/skip', { puzzleId: puzzleRef.current.id });
+    } catch { /* ignore */ }
+    loadPuzzle();
+  }, [loadPuzzle]);
+
+  // ─── Retry Puzzle ────────────────────────────────────────────────────────
+  const handleRetry = useCallback(() => {
+    if (!puzzleRef.current) return;
+    clearInterval(replayTimerRef.current);
+    
+    // Reset state to playing the same puzzle
+    const c = new Chess(puzzleRef.current.fen);
+    chessRef.current = c;
+    setFen(c.fen());
+    
+    submittedRef.current = false;
+    playerMovesRef.current = [];
+    
+    setStatus('playing');
+    setCustomStyles({});
+    setFeedback(null);
+    setRatingDelta(null);
+    setSolutionMoves([]);
+    setReplayStep(-1);
+    setTimeLeft(TIMER_MAX);
+    startTimeRef.current = Date.now();
+    
+    timerRef.current = setInterval(() => {
+      setTimeLeft((t) => {
+        if (t <= 1) {
+          handleTimeout();
+          return 0;
+        }
+        return t - 1;
+      });
+    }, 1000);
+  }, [handleTimeout]);
+
+  // ─── Show Next Move ──────────────────────────────────────────────────────
+  const handleShowNextMove = useCallback(() => {
+    if (status !== 'playing' || !puzzleRef.current) return;
+    
+    const nextMoveUci = puzzleRef.current.moves[playerMovesRef.current.length];
+    if (nextMoveUci) {
+      const from = nextMoveUci.slice(0, 2);
+      const to = nextMoveUci.slice(2, 4);
+      setCustomStyles((prev) => ({
+        ...prev,
+        [from]: { background: HINT_SQ },
+        [to]: { background: HINT_SQ },
+      }));
+    }
+  }, [status]);
 
   // Cleanup replay timer on unmount
   useEffect(() => {
@@ -444,13 +512,22 @@ export default function PuzzlePage() {
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
             {status === 'fail' && solutionMoves.length > 0 && (
-              <button
-                id="show-solution"
-                className="btn btn-accent"
-                onClick={showSolution}
-              >
-                ▶ Show Solution
-              </button>
+              <>
+                <button
+                  id="show-solution"
+                  className="btn btn-accent"
+                  onClick={showSolution}
+                >
+                  ▶ Show Solution
+                </button>
+                <button
+                  id="retry-puzzle"
+                  className="btn btn-secondary"
+                  onClick={handleRetry}
+                >
+                  ↻ Retry Puzzle
+                </button>
+              </>
             )}
             {(isFinished || status === 'replaying') && (
               <button id="next-puzzle" className="btn btn-primary" onClick={loadPuzzle}>
@@ -458,18 +535,29 @@ export default function PuzzlePage() {
               </button>
             )}
             {status === 'playing' && (
-              <button
-                id="give-up-puzzle"
-                className="btn btn-ghost btn-sm"
-                onClick={() => {
-                  clearInterval(timerRef.current);
-                  setStatus('fail');
-                  submittedRef.current = true;
-                  submitSolution(playerMovesRef.current).catch(() => {});
-                }}
-              >
-                Give up
-              </button>
+              <>
+                <button
+                  id="show-next-move"
+                  className="btn btn-accent"
+                  onClick={handleShowNextMove}
+                >
+                  💡 Show Next Move
+                </button>
+                <button
+                  id="skip-puzzle"
+                  className="btn btn-secondary"
+                  onClick={handleSkip}
+                >
+                  ⏭ Skip Puzzle
+                </button>
+                <button
+                  id="quit-puzzle"
+                  className="btn btn-ghost"
+                  onClick={handleQuit}
+                >
+                  ✕ Quit
+                </button>
+              </>
             )}
           </div>
         </div>

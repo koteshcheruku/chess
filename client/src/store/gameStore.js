@@ -13,6 +13,8 @@ export const useGameStore = create((set, get) => ({
   drawOffered: false,
   drawOfferedBy: null,
   status: 'idle',  // 'idle' | 'waiting' | 'active' | 'finished'
+  isBotGame: false,
+  botElo: null,
 
   setGame: (data) => set({ ...data }),
 
@@ -46,5 +48,7 @@ export const useGameStore = create((set, get) => ({
     drawOffered: false,
     drawOfferedBy: null,
     status: 'idle',
+    isBotGame: false,
+    botElo: null,
   }),
 }));

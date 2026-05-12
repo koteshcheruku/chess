@@ -13,6 +13,7 @@ import PuzzlePage from './pages/PuzzlePage';
 import ProfilePage from './pages/ProfilePage';
 import SettingsPage from './pages/SettingsPage';
 import OAuthCallbackPage from './pages/OAuthCallbackPage';
+import ErrorPage from './pages/ErrorPage';
 
 function RequireAuth({ children }) {
   const { accessToken } = useAuthStore();
@@ -41,7 +42,9 @@ function App() {
         <Route path="/profile/:id" element={<RequireAuth><ProfilePage /></RequireAuth>} />
         <Route path="/settings" element={<RequireAuth><SettingsPage /></RequireAuth>} />
         <Route path="/oauth-callback" element={<OAuthCallbackPage />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
+        <Route path="/401" element={<ErrorPage type="401" />} />
+        <Route path="/403" element={<ErrorPage type="403" />} />
+        <Route path="*" element={<ErrorPage type="404" />} />
       </Routes>
     </BrowserRouter>
   );

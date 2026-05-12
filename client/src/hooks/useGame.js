@@ -19,6 +19,8 @@ export function useGame(gameId) {
       clocks: data.clocks,
       white: data.white,
       black: data.black,
+      isBotGame: data.isBotGame,
+      botElo: data.botElo,
       status: 'waiting',
     });
   }, [setGame]));

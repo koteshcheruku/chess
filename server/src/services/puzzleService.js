@@ -195,4 +195,20 @@ async function submitPuzzle(userId, { puzzleId, moves, timeTaken }) {
   return { success, delta, newRating, correctMoves: solution };
 }
 
-module.exports = { getRandomPuzzle, getPuzzle, submitPuzzle };
+/**
+ * Skip a puzzle — records a skipped attempt so it won't be served again immediately,
+ * but does NOT modify the user's rating.
+ */
+async function skipPuzzle(userId, puzzleId) {
+  const { rows: userRows } = await query('SELECT rating FROM users WHERE id = $1', [userId]);
+  if (userRows.length === 0) throw Object.assign(new Error('User not found'), { status: 404 });
+  const { rating } = userRows[0];
+
+  await query(
+    `INSERT INTO puzzle_attempts (id, user_id, puzzle_id, success, time_taken, rating_before, rating_after)
+     VALUES ($1, $2, $3, FALSE, 0, $4, $4)`,
+    [uuidv4(), userId, puzzleId, rating]
+  );
+}
+
+module.exports = { getRandomPuzzle, getPuzzle, submitPuzzle, skipPuzzle };

@@ -3,7 +3,7 @@ const router = express.Router();
 const { requireAuth } = require('../middleware/auth');
 const { validate, submitPuzzleSchema } = require('../middleware/validate');
 const { puzzleLimiter } = require('../middleware/rateLimit');
-const { getRandomPuzzle, getPuzzle, submitPuzzle } = require('../services/puzzleService');
+const { getRandomPuzzle, getPuzzle, submitPuzzle, skipPuzzle } = require('../services/puzzleService');
 
 const VALID_DIFFICULTIES = ['easy', 'medium', 'hard', 'master'];
 
@@ -37,6 +37,18 @@ router.post('/submit', requireAuth, validate(submitPuzzleSchema), async (req, re
   try {
     const result = await submitPuzzle(req.user.id, req.body);
     res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/puzzle/skip — mark puzzle as skipped, no rating change
+router.post('/skip', requireAuth, async (req, res, next) => {
+  try {
+    const { puzzleId } = req.body;
+    if (!puzzleId) return res.status(400).json({ error: 'puzzleId required' });
+    await skipPuzzle(req.user.id, puzzleId);
+    res.json({ skipped: true });
   } catch (err) {
     next(err);
   }

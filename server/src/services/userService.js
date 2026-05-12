@@ -58,7 +58,7 @@ async function getStats(userId) {
             g.created_at
      FROM games g
      JOIN users w ON w.id = g.white_id
-     JOIN users b ON b.id = g.black_id
+     LEFT JOIN users b ON b.id = g.black_id
      WHERE (g.white_id = $1 OR g.black_id = $1) AND g.status = 'finished'
      ORDER BY g.created_at DESC
      LIMIT 10`,
