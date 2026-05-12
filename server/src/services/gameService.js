@@ -20,10 +20,10 @@ async function createGame({ whiteId, blackId, timeControl, increment = 0, isBotG
     `INSERT INTO games
        (id, white_id, black_id, time_control, increment, status, is_bot_game, bot_elo,
         white_rating_before, black_rating_before)
-     VALUES ($1, $2, $3::VARCHAR, $4, $5,
+     VALUES ($1::VARCHAR, $2::VARCHAR, $3::VARCHAR, $4, $5,
        'waiting',
        $6, $7,
-       (SELECT rating FROM users WHERE id = $2),
+       (SELECT rating FROM users WHERE id = $2::VARCHAR),
        (SELECT rating FROM users WHERE id = $3::VARCHAR)
      )
      RETURNING *`,
