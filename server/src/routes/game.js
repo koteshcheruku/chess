@@ -47,11 +47,18 @@ router.post('/create', requireAuth, validate(createGameSchema), async (req, res,
       return res.status(201).json({ game, playerColor: resolvedColor });
     }
 
-    // Human matchmaking: look for an open game
+    // Human matchmaking: first expire games waiting longer than 10 minutes
+    await query(
+      `UPDATE games SET status = 'aborted', result = 'aborted', updated_at = NOW()
+       WHERE status = 'waiting' AND created_at < NOW() - INTERVAL '10 minutes'`
+    );
+
+    // Look for an open game (created within last 10 min, by a different user)
     const { rows: available } = await query(
       `SELECT id FROM games
        WHERE status = 'waiting' AND time_control = $1 AND is_bot_game = FALSE
          AND white_id != $2 AND black_id IS NULL
+         AND created_at > NOW() - INTERVAL '10 minutes'
        ORDER BY created_at ASC LIMIT 1`,
       [timeControl, userId]
     );
@@ -60,10 +67,14 @@ router.post('/create', requireAuth, validate(createGameSchema), async (req, res,
       const gameId = available[0].id;
       const resolvedColor = 'black';
       await query(
-        `UPDATE games SET black_id = $1, status = 'active',
-                          black_rating_before = (SELECT rating FROM users WHERE id = $1),
-                          updated_at = NOW()
-         WHERE id = $2`,
+        `UPDATE games g
+         SET black_id = $1,
+             status = 'active',
+             black_rating_before = u.rating,
+             updated_at = NOW()
+         FROM users u
+         WHERE g.id = $2
+           AND u.id = $1`,
         [userId, gameId]
       );
       const game = await getGame(gameId);

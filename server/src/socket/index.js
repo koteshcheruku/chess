@@ -4,10 +4,23 @@ const { registerGameHandlers } = require('./gameHandler');
 
 let io;
 
+// Build allowed origins from env (comma-separated) + localhost fallback
+const ALLOWED_ORIGINS = [
+  'http://localhost:5173',
+  'http://localhost:4173',
+  ...(process.env.CLIENT_URL
+    ? process.env.CLIENT_URL.split(',').map(u => u.trim()).filter(Boolean)
+    : []),
+];
+
 function initSocket(server) {
   io = new Server(server, {
     cors: {
-      origin: process.env.CLIENT_URL || 'http://localhost:5173',
+      origin: (origin, callback) => {
+        if (!origin) return callback(null, true);
+        if (ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
+        callback(new Error(`Socket CORS: origin ${origin} not allowed`));
+      },
       credentials: true,
     },
     pingTimeout: 20000,

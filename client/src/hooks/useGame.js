@@ -1,5 +1,6 @@
 import { useCallback, useEffect } from 'react';
 import { useGameStore } from '../store/gameStore';
+import { getSocket } from '../socket/socket';
 import { useSocketEvent, useSocketEmit } from './useSocket';
 
 /**
@@ -21,12 +22,18 @@ export function useGame(gameId) {
       black: data.black,
       isBotGame: data.isBotGame,
       botElo: data.botElo,
-      status: 'waiting',
+      status: data.status ?? 'waiting', // Use server-provided status (may be 'active' on reconnect)
     });
   }, [setGame]));
 
   useSocketEvent('game_start', useCallback((data) => {
-    setGame({ status: 'active', white: data.white, black: data.black });
+    setGame({
+      status: 'active',
+      white: data.white,
+      black: data.black,
+      fen: data.fen,                      // Current FEN (important for reconnects mid-game)
+      ...(data.clocks ? { clocks: data.clocks } : {}), // Sync clocks on reconnect
+    });
   }, [setGame]));
 
   useSocketEvent('move_made', useCallback((data) => {
@@ -49,14 +56,26 @@ export function useGame(gameId) {
     console.error('[Game error]', err.code, err.message);
   }, []));
 
-  // --- Join game on mount ---
+  // --- Join game on mount — re-join on every reconnect too ---
   useEffect(() => {
-    if (gameId) {
-      emit('join_game', { gameId });
+    if (!gameId) return;
+
+    const socket = getSocket();
+    if (!socket) {
+      console.warn('[useGame] No socket available for join_game');
+      return;
     }
-    return () => {
-      // Don't reset on cleanup — let user see end state
-    };
+
+    const doJoin = () => emit('join_game', { gameId });
+
+    // Persistent listener: fires on initial connect AND every subsequent reconnect
+    // Server handles the "already started" case via the else-if(state.started) branch
+    socket.on('connect', doJoin);
+
+    // If already connected, join immediately
+    if (socket.connected) doJoin();
+
+    return () => socket.off('connect', doJoin);
   }, [gameId, emit]);
 
   // --- Actions ---

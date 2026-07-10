@@ -1,0 +1,84 @@
+version: '3.9'
+
+services:
+  # ─────────────────────────────────────────────────────────────
+  # PostgreSQL Database
+  # ─────────────────────────────────────────────────────────────
+  db:
+    image: postgres:16-alpine
+    container_name: chess_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: chess_user
+      POSTGRES_PASSWORD: chess_pass
+      POSTGRES_DB: chessdb
+    volumes:
+      - chess_pgdata:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U chess_user -d chessdb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─────────────────────────────────────────────────────────────
+  # Backend — Express + Socket.io
+  # ─────────────────────────────────────────────────────────────
+  server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: chess_server
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PORT: 5000
+      NODE_ENV: development
+      # Point to the local Compose DB (overrides .env when running in Docker)
+      DATABASE_URL: postgresql://chess_user:chess_pass@db:5432/chessdb
+      # Comma-separated list of allowed client origins
+      CLIENT_URL: http://localhost:5173,http://chess_client:5173
+      JWT_SECRET: ${JWT_SECRET:-chess_jwt_secret_change_this_in_production_min_64_chars_long_abc123}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-chess_refresh_secret_change_this_in_production_min_64_chars_xyz789}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-15m}
+      JWT_REFRESH_EXPIRES_IN: ${JWT_REFRESH_EXPIRES_IN:-7d}
+      LICHESS_TOKEN: ${LICHESS_TOKEN:-}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GOOGLE_CALLBACK_URL: ${GOOGLE_CALLBACK_URL:-http://localhost:5000/api/auth/google/callback}
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./server:/app
+      - /app/node_modules
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:5000/api/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  # ─────────────────────────────────────────────────────────────
+  # Frontend — Vite dev server
+  # ─────────────────────────────────────────────────────────────
+  client:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+    container_name: chess_client
+    restart: unless-stopped
+    depends_on:
+      - server
+    environment:
+      VITE_API_URL: http://localhost:5000
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./client:/app
+      - /app/node_modules
+
+volumes:
+  chess_pgdata:
+    driver: local

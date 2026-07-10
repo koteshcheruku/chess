@@ -29,13 +29,11 @@ function App() {
     if (accessToken) connectSocket(accessToken);
   }, [accessToken]);
 
-  // Listen for background token refreshes to reconnect socket
+  // Listen for background token refreshes — update socket auth without destroying the instance
   React.useEffect(() => {
     const handleRefresh = (e) => {
-      // Dynamic import to avoid any chance of circular dependencies
-      import('./socket/socket').then(({ disconnectSocket, connectSocket }) => {
-        disconnectSocket();
-        connectSocket(e.detail.accessToken);
+      import('./socket/socket').then(({ updateSocketToken }) => {
+        updateSocketToken(e.detail.accessToken);
       });
     };
     window.addEventListener('auth_refresh', handleRefresh);

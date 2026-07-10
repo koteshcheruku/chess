@@ -1,12 +1,17 @@
 const { Pool } = require('pg');
 
-const pool = new Pool({
+const config = {
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false },
   max: 10,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 2000,
-});
+};
+
+if (process.env.NODE_ENV === 'production') {
+  config.ssl = { rejectUnauthorized: false };
+}
+
+const pool = new Pool(config);
 
 pool.on('error', (err) => {
   console.error('Unexpected DB client error:', err);

@@ -7,7 +7,14 @@ export function getSocket() {
 }
 
 export function connectSocket(token) {
-  if (socket?.connected) return socket;
+  if (socket) {
+    // Socket instance already exists — just ensure it's connected with the latest token
+    if (!socket.connected) {
+      socket.auth = { token };
+      socket.connect();
+    }
+    return socket;
+  }
 
   const SOCKET_URL = import.meta.env.VITE_API_URL || window.location.origin;
 
@@ -16,7 +23,6 @@ export function connectSocket(token) {
     autoConnect: true,
     reconnectionAttempts: 8,
     reconnectionDelay: 2000,
-    // Include polling as fallback — websocket-only fails in some dev proxy configs
     transports: ['polling', 'websocket'],
   });
 
@@ -35,9 +41,27 @@ export function connectSocket(token) {
   return socket;
 }
 
+/**
+ * Update the JWT used for socket auth without destroying the socket instance.
+ * All registered event listeners are preserved across the reconnect.
+ * Called when the access token is refreshed (interceptor dispatches 'auth_refresh').
+ */
+export function updateSocketToken(newToken) {
+  if (!socket) {
+    // No socket yet — create one fresh
+    connectSocket(newToken);
+    return;
+  }
+  socket.auth = { token: newToken };
+  // Disconnect then reconnect the SAME instance — listeners stay registered
+  socket.disconnect();
+  socket.connect();
+}
+
 export function disconnectSocket() {
   if (socket) {
     socket.disconnect();
     socket = null;
   }
 }
+

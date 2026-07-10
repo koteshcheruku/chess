@@ -23,10 +23,26 @@ app.get('/test', (req, res) => {
   console.log("Test route hit!"); // Check Render logs for this
   res.json({ message: "Pass! Backend is working." });
 });
+
+// --- Build allowed origins list from env (comma-separated) + localhost fallback ---
+const ALLOWED_ORIGINS = [
+  'http://localhost:5173',
+  'http://localhost:4173',
+  ...(process.env.CLIENT_URL
+    ? process.env.CLIENT_URL.split(',').map(u => u.trim()).filter(Boolean)
+    : []),
+];
+
 // --- Security & Utilities ---
 app.use(helmet());
 app.use(cors({
-  origin: process.env.CLIENT_URL || 'http://localhost:5173',
+  origin: (origin, callback) => {
+    // Allow requests with no origin (e.g. curl, Postman, server-to-server)
+    if (!origin) return callback(null, true);
+    if (ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
+    console.warn(`[CORS] Blocked origin: ${origin}`);
+    callback(new Error(`CORS: origin ${origin} not allowed`));
+  },
   credentials: true,
 }));
 app.use(morgan('dev'));

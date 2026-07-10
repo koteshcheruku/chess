@@ -33,6 +33,9 @@ export default function ChessBoard({
   onMove,
   disabled = false,
   legalMoves = [],
+  boardWidth,
+  customDarkSquareStyle,
+  customLightSquareStyle,
 }) {
   const [selectedSquare, setSelectedSquare] = useState(null);
   const [pendingPromotion, setPendingPromotion] = useState(null); // { from, to }
@@ -95,7 +98,7 @@ export default function ChessBoard({
     setSelectedSquare(null);
   };
 
-  const boardWidth = Math.min(560, window.innerWidth - 32);
+  const resolvedWidth = boardWidth ?? Math.min(560, window.innerWidth - 32);
 
   return (
     <div className="chessboard-wrapper">
@@ -106,11 +109,11 @@ export default function ChessBoard({
         onPieceDrop={handlePieceDrop}
         onSquareClick={handleSquareClick}
         customBoardStyle={{ borderRadius: '4px', boxShadow: 'none' }}
-        customDarkSquareStyle={{ backgroundColor: DARK_SQ }}
-        customLightSquareStyle={{ backgroundColor: LIGHT_SQ }}
+        customDarkSquareStyle={customDarkSquareStyle ?? { backgroundColor: DARK_SQ }}
+        customLightSquareStyle={customLightSquareStyle ?? { backgroundColor: LIGHT_SQ }}
         customSquareStyles={customSquareStyles}
         arePiecesDraggable={!disabled}
-        boardWidth={boardWidth}
+        boardWidth={resolvedWidth}
         showBoardNotation
       />
 

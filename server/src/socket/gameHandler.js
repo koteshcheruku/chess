@@ -160,6 +160,13 @@ function registerGameHandlers(io, socket) {
       }
 
       const state = activeGames.get(gameId);
+
+      // Always sync player IDs from the fresh DB record.
+      // whiteId/blackId may have been null when the game was first initialized
+      // (e.g., black_id is null until User B calls POST /api/game/create and joins).
+      state.whiteId = game.white_id;
+      if (game.black_id) state.blackId = game.black_id;
+
       if (playerColor === 'white') state.white_socket = socket.id;
       else state.black_socket = socket.id;
 
@@ -173,6 +180,7 @@ function registerGameHandlers(io, socket) {
         timeControl: game.time_control,
         isBotGame: game.is_bot_game,
         botElo: game.bot_elo,
+        status: state.started ? 'active' : 'waiting', // Tell client the real game state
       });
 
       // Start game when both sides are present
@@ -197,6 +205,18 @@ function registerGameHandlers(io, socket) {
         if (state.is_bot_game && state.bot_color === 'w') {
           scheduleBotMove(io, gameId);
         }
+      } else if (state.started) {
+        // Game already started — this is a reconnection or React Strict Mode double-mount.
+        // Re-send game_start with the current board position to this socket only.
+        socket.emit('game_start', {
+          gameId,
+          fen: state.chess.fen(),
+          white: { id: game.white_id, username: game.white_username, rating: game.white_rating },
+          black: { id: game.black_id, username: game.black_username, rating: game.black_rating },
+          timeControl: game.time_control,
+          increment: game.increment,
+          clocks: { white: state.white_time, black: state.black_time },
+        });
       }
     } catch (err) {
       console.error('[join_game]', err.message);

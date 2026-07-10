@@ -37,6 +37,7 @@ export default function PuzzlePage() {
   const puzzleRef  = useRef(null);   // current puzzle data
   const playerMovesRef = useRef([]); // accumulated player moves
   const replayTimerRef = useRef(null); // for solution replay animation
+  const loadPuzzleRef = useRef(null); // stable ref to loadPuzzle so handleSkip can call it before declaration
 
   // React state — only for UI rendering
   const [fen, setFen]           = useState('');
@@ -154,6 +155,7 @@ export default function PuzzlePage() {
   }, [navigate]);
 
   // ─── Skip Puzzle ─────────────────────────────────────────────────────────
+  // Uses loadPuzzleRef so it doesn't depend on loadPuzzle being declared first
   const handleSkip = useCallback(async () => {
     if (submittedRef.current || !puzzleRef.current) return;
     submittedRef.current = true;
@@ -161,8 +163,8 @@ export default function PuzzlePage() {
     try {
       await api.post('/puzzle/skip', { puzzleId: puzzleRef.current.id });
     } catch { /* ignore */ }
-    loadPuzzle();
-  }, [loadPuzzle]);
+    loadPuzzleRef.current?.();
+  }, []);
 
   // ─── Retry Puzzle ────────────────────────────────────────────────────────
   const handleRetry = useCallback(() => {
@@ -219,6 +221,8 @@ export default function PuzzlePage() {
   }, []);
 
   // ─── Load a new puzzle ───────────────────────────────────────────────────
+  // ─── Load a new puzzle ───────────────────────────────────────────────────
+  // Defined after handleSkip intentionally — handleSkip calls it via loadPuzzleRef
   const loadPuzzle = useCallback(async () => {
     // Clear timers immediately
     clearInterval(timerRef.current);
@@ -275,6 +279,11 @@ export default function PuzzlePage() {
       setLoading(false);
     }
   }, [handleTimeout, difficulty]);
+
+  // Keep the ref in sync whenever loadPuzzle identity changes
+  useEffect(() => {
+    loadPuzzleRef.current = loadPuzzle;
+  }, [loadPuzzle]);
 
   // Mount: load first puzzle; cleanup timer on unmount
   useEffect(() => {
